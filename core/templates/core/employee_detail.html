@@ -1,0 +1,128 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+        <!-- Header -->
+        <div class="bg-blue-600 text-white p-6">
+            <div class="flex items-center">
+                <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center text-blue-600 text-2xl font-bold">
+                    {{ employee.get_full_name|make_list|first }}
+                </div>
+                <div class="ml-6">
+                    <h1 class="text-3xl font-bold">{{ employee.get_full_name }}</h1>
+                    <p class="text-blue-100">{{ employee.designation }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Content -->
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Basic Information -->
+                <div class="space-y-6">
+                    <h2 class="text-xl font-semibold text-gray-800">Basic Information</h2>
+                    <div class="space-y-4">
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+                                <i class="fas fa-id-card"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm text-gray-600">Employee ID</p>
+                                <p class="font-medium">{{ employee.employee_id }}</p>
+                            </div>
+                        </div>
+                        <!-- <div class="flex items-center">
+                            <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+                                <i class="fas fa-building"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm text-gray-600">Department</p>
+                                <p class="font-medium">{{ employee.department.name }}</p>
+                            </div>
+                        </div> -->
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+                                <i class="fas fa-calendar"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm text-gray-600">Date Joined</p>
+                                <p class="font-medium">{{ employee.date_joined }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contact Information -->
+                <div class="space-y-6">
+                    <h2 class="text-xl font-semibold text-gray-800">Contact Information</h2>
+                    <div class="space-y-4">
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+                                <i class="fas fa-envelope"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm text-gray-600">Email</p>
+                                <p class="font-medium">{{ employee.user.email }}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+                                <i class="fas fa-phone"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm text-gray-600">Phone</p>
+                                <p class="font-medium">{{ employee.phone_number }}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+                                <i class="fas fa-phone-square"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm text-gray-600">Emergency Contact</p>
+                                <p class="font-medium">{{ employee.emergency_contact }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Biometric Status -->
+            <div class="mt-8">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Biometric Status</h2>
+                <div class="bg-gray-50 rounded-lg p-6">
+                    {% if employee.fingerprint_data %}
+                    <div class="flex items-center text-green-600">
+                        <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                            <i class="fas fa-fingerprint text-2xl"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="font-medium">Fingerprint Enrolled</p>
+                            <p class="text-sm text-gray-600">Employee can use biometric attendance</p>
+                        </div>
+                        <button class="ml-auto bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+                            Update Fingerprint
+                        </button>
+                    </div>
+                    {% else %}
+                    <div class="flex items-center text-yellow-600">
+                        <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                            <i class="fas fa-fingerprint text-2xl"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="font-medium">Fingerprint Not Enrolled</p>
+                            <p class="text-sm text-gray-600">Employee needs to enroll fingerprint</p>
+                        </div>
+                        <a href="{% url 'enroll_fingerprint' employee.pk %}" 
+                           class="ml-auto bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors">
+                            Enroll Now
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,211 @@
+{% extends "core/base.html" %}
+
+{% block title %}Enroll Fingerprint | AttendanceX{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="bg-white shadow-md rounded-lg p-6">
+        <div class="text-center mb-8">
+            <h2 class="text-2xl font-bold mb-2">Fingerprint Enrollment</h2>
+            <p class="text-gray-600">Enrolling fingerprint for: <span class="font-semibold">{{ employee.get_full_name }}</span></p>
+        </div>
+
+        <div id="enrollmentSteps" class="space-y-8">
+            <!-- Step indicators -->
+            <div class="flex justify-center mb-8">
+                <div class="flex items-center">
+                    <div id="step1Indicator" class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                        <span class="text-gray-600">1</span>
+                    </div>
+                    <div class="w-16 h-1 bg-gray-200"></div>
+                    <div id="step2Indicator" class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                        <span class="text-gray-600">2</span>
+                    </div>
+                    <div class="w-16 h-1 bg-gray-200"></div>
+                    <div id="step3Indicator" class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                        <span class="text-gray-600">3</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 1: First Scan -->
+            <div id="step1" class="text-center">
+                <div class="w-24 h-24 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
+                    <i class="fas fa-fingerprint text-4xl text-blue-600"></i>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">First Scan</h3>
+                <p class="text-gray-600 mb-4">Please place your finger on the scanner</p>
+            </div>
+
+            <!-- Step 2: Remove Finger -->
+            <div id="step2" class="text-center hidden">
+                <div class="w-24 h-24 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
+                    <i class="fas fa-hand-paper text-4xl text-blue-600"></i>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">Remove Finger</h3>
+                <p class="text-gray-600 mb-4">Please remove your finger from the scanner</p>
+            </div>
+
+            <!-- Step 3: Second Scan -->
+            <div id="step3" class="text-center hidden">
+                <div class="w-24 h-24 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
+                    <i class="fas fa-fingerprint text-4xl text-blue-600"></i>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">Second Scan</h3>
+                <p class="text-gray-600 mb-4">Please place the same finger on the scanner again</p>
+            </div>
+
+            <!-- Result -->
+            <div id="enrollmentResult" class="hidden text-center">
+                <div id="successResult" class="hidden">
+                    <div class="w-24 h-24 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
+                        <i class="fas fa-check text-4xl text-green-600"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-green-600 mb-2">Enrollment Successful!</h3>
+                    <p class="text-gray-600">Fingerprint has been successfully enrolled</p>
+                </div>
+                
+                <div id="errorResult" class="hidden">
+                    <div class="w-24 h-24 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
+                        <i class="fas fa-exclamation-triangle text-4xl text-red-600"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-red-600 mb-2">Enrollment Failed</h3>
+                    <p id="errorMessage" class="text-gray-600">An error occurred during enrollment</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="mt-8 flex justify-center space-x-4">
+            <button id="startEnrollment" 
+                class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                Start Enrollment
+            </button>
+            <a href="{% url 'employee_detail' pk=employee.id %}" 
+                class="px-6 py-2 border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                Back to Profile
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const startButton = document.getElementById('startEnrollment');
+    let enrollmentInProgress = false;
+    let currentStep = 1;
+    
+    function updateStepUI(step) {
+        // Hide all steps
+        document.querySelectorAll('#enrollmentSteps > div[id^="step"]').forEach(div => div.classList.add('hidden'));
+        // Show current step
+        document.getElementById(`step${step}`).classList.remove('hidden');
+        // Update indicators
+        for (let i = 1; i <= 3; i++) {
+            const indicator = document.getElementById(`step${i}Indicator`);
+            if (i < step) {
+                indicator.classList.remove('bg-gray-200', 'bg-blue-600');
+                indicator.classList.add('bg-green-500');
+                indicator.innerHTML = '<i class="fas fa-check text-white"></i>';
+            } else if (i === step) {
+                indicator.classList.remove('bg-gray-200', 'bg-green-500');
+                indicator.classList.add('bg-blue-600');
+                indicator.querySelector('span').classList.add('text-white');
+            }
+        }
+    }
+
+    async function pollScannerStatus(endpoint) {
+        try {
+            const response = await fetch(endpoint, {
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                }
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('Polling error:', error);
+            return { status: 'error', message: 'Failed to communicate with scanner' };
+        }
+    }
+
+    async function startEnrollmentProcess() {
+        if (enrollmentInProgress) return;
+        enrollmentInProgress = true;
+        
+        try {
+            // Initialize enrollment session
+            const initResponse = await fetch('{% url "enroll_fingerprint" employee_id=employee.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ action: 'start' })
+            });
+
+            if (!initResponse.ok) throw new Error('Failed to start enrollment');
+
+            // Step 1: Wait for first scan
+            updateStepUI(1);
+            while (true) {
+                const status = await pollScannerStatus('{% url "scanner_status" %}');
+                if (status.status === 'fingerprint_detected') break;
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            // Step 2: Wait for finger removal
+            updateStepUI(2);
+            while (true) {
+                const status = await pollScannerStatus('{% url "scanner_status" %}');
+                if (status.status === 'finger_removed') break;
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            // Step 3: Wait for second scan
+            updateStepUI(3);
+            while (true) {
+                const status = await pollScannerStatus('{% url "scanner_status" %}');
+                if (status.status === 'fingerprint_detected') break;
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            // Complete enrollment
+            const completeResponse = await fetch('{% url "enroll_fingerprint" employee_id=employee.id %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ action: 'complete' })
+            });
+
+            const result = await completeResponse.json();
+
+            // Show result
+            document.getElementById('enrollmentResult').classList.remove('hidden');
+            if (result.status === 'success') {
+                document.getElementById('successResult').classList.remove('hidden');
+                document.getElementById('errorResult').classList.add('hidden');
+                startButton.textContent = 'Enrollment Complete';
+                startButton.disabled = true;
+            } else {
+                throw new Error(result.message);
+            }
+
+        } catch (error) {
+            document.getElementById('enrollmentResult').classList.remove('hidden');
+            document.getElementById('errorResult').classList.remove('hidden');
+            document.getElementById('successResult').classList.add('hidden');
+            document.getElementById('errorMessage').textContent = error.message || 'An unexpected error occurred';
+        } finally {
+            enrollmentInProgress = false;
+        }
+    }
+
+    startButton.addEventListener('click', startEnrollmentProcess);
+});
+</script>
+
+{% csrf_token %}
+{% endblock %}

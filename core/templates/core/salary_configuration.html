@@ -1,0 +1,31 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Salary Configuration{% endblock %}
+
+{% block content %}
+<div class="bg-white p-6 rounded-lg shadow-lg">
+    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Salary Configuration</h2>
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700">
+            Save Changes
+        </button>
+    </form>
+
+    {% if config %}
+        <div class="mt-6">
+            <h3 class="text-xl font-semibold text-gray-800">Current Configuration</h3>
+            <ul class="mt-2 space-y-2">
+                <li><strong>Standard Work Start:</strong> {{ config.standard_work_start }}</li>
+                <li><strong>Standard Work End:</strong> {{ config.standard_work_end }}</li>
+                <li><strong>Working Hours Per Day:</strong> {{ config.working_hours_per_day }}</li>
+                <li><strong>Hourly Rate:</strong> {{ config.hourly_rate }}</li>
+                <li><strong>Late Deduction Rate:</strong> {{ config.late_deduction_rate }}</li>
+                <li><strong>Early Leave Deduction Rate:</strong> {{ config.early_leave_deduction_rate }}</li>
+                <li><strong>Overtime Fixed Rate:</strong> {{ config.overtime_fixed_rate }}</li>
+            </ul>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

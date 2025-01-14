@@ -1,0 +1,129 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="container mx-auto">
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white p-6 rounded-lg shadow">
+            <div class="flex items-center">
+                <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-green-600">
+                    <i class="fas fa-users text-xl"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-gray-600">Present Today</p>
+                    <h3 class="text-2xl font-bold">{{ present_count }}/{{ total_employees }}</h3>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white p-6 rounded-lg shadow">
+            <div class="flex items-center">
+                <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                    <i class="fas fa-clock text-xl"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-gray-600">Current Time</p>
+                    <h3 class="text-2xl font-bold" id="current-time">--:--:--</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow">
+            <div class="flex items-center">
+                <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center text-purple-600">
+                    <i class="fas fa-fingerprint text-xl"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-gray-600">Scanner Status</p>
+                    <h3 class="text-2xl font-bold" id="scanner-status">Checking...</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attendance Section -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-xl font-semibold mb-4">Currently Present Employees</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                        <!-- <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th> -->
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check In</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for attendance in present_employees %}
+                    <tr>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center">
+                                <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                                    {{ attendance.employee.get_full_name|make_list|first }}
+                                </div>
+                                <div class="ml-4">
+                                    <p class="font-medium">{{ attendance.employee.get_full_name }}</p>
+                                    <p class="text-sm text-gray-500">{{ attendance.employee.employee_id }}</p>
+                                </div>
+                            </div>
+                        </td>
+                        <!-- <td class="px-6 py-4">{{ attendance.employee.department.name }}</td> -->
+                        <td class="px-6 py-4">{{ attendance.check_in|time:"H:i:s" }}</td>
+                        <td class="px-6 py-4" id="duration-{{ attendance.id }}">
+                            <!-- Duration will be updated by JavaScript -->
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+                            No employees currently present
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Update current time
+    function updateTime() {
+        const now = new Date();
+        document.getElementById('current-time').textContent = 
+            now.toLocaleTimeString('en-US', { hour12: false });
+    }
+    setInterval(updateTime, 1000);
+    updateTime();
+
+    // Check scanner status
+    async function checkScannerStatus() {
+        try {
+            const response = await fetch('{% url "scanner_status" %}');
+            const data = await response.json();
+            document.getElementById('scanner-status').textContent = 
+                data.status === 'success' ? 'Connected' : 'Disconnected';
+            document.getElementById('scanner-status').className = 
+                data.status === 'success' ? 'text-2xl font-bold text-green-600' : 'text-2xl font-bold text-red-600';
+        } catch (error) {
+            document.getElementById('scanner-status').textContent = 'Error';
+            document.getElementById('scanner-status').className = 'text-2xl font-bold text-red-600';
+        }
+    }
+    setInterval(checkScannerStatus, 30000);
+    checkScannerStatus();
+
+    // Update durations
+    function updateDurations() {
+        const now = new Date();
+        document.querySelectorAll('[id^="duration-"]').forEach(element => {
+            const checkInTime = new Date(element.dataset.checkin);
+            const duration = Math.floor((now - checkInTime) / 1000 / 60); // minutes
+            element.textContent = `${Math.floor(duration / 60)}h ${duration % 60}m`;
+        });
+    }
+    setInterval(updateDurations, 60000);
+    updateDurations();
+</script>
+{% endblock %}
