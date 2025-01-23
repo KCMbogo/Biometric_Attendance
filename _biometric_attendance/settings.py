@@ -127,6 +127,12 @@ LOGGING = {
 }
 
 
+FINGERPRINT_SCANNER = {
+    'PORT': '/dev/ttyACM0',  # Update this for your system
+    'BAUDRATE': 9600,
+    'TIMEOUT': 1
+}
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/

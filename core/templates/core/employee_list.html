@@ -57,8 +57,8 @@
                         View Details
                     </a>
                     <a href="{% url 'enroll_fingerprint' employee.pk %}" 
-                       class="flex-1 {% if employee.fingerprint_data %}bg-green-50 text-green-600{% else %}bg-yellow-50 text-yellow-600{% endif %} px-3 py-2 rounded text-center hover:bg-opacity-75 transition-colors">
-                        {% if employee.fingerprint_data %}
+                       class="flex-1 {% if employee.fingerprint_template_id %}bg-green-50 text-green-600{% else %}bg-yellow-50 text-yellow-600{% endif %} px-3 py-2 rounded text-center hover:bg-opacity-75 transition-colors">
+                        {% if employee.fingerprint_template_id %}
                             <i class="fas fa-fingerprint mr-1"></i> Enrolled
                         {% else %}
                             <i class="fas fa-fingerprint mr-1"></i> Enroll

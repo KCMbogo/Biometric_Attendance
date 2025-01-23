@@ -2,13 +2,12 @@
 from datetime import date, timezone
 from pyexpat.errors import messages
 from django.shortcuts import redirect
-from pyfingerprint.pyfingerprint import PyFingerprint
-import tempfile
-import os
+import serial
+import time
+import base64
 import hashlib
 import logging
 from typing import Optional, Tuple, List
-import base64
 from django.conf import settings
 
 from core.models import Attendance, Employee
@@ -22,33 +21,65 @@ class FingerprintError(Exception):
     pass
 
 class FingerprintScanner:
-    def __init__(self, port: str = '/dev/ttyUSB0', baudrate: int = 57600):
+    def __init__(self, port: str = '/dev/ttyACM0', baudrate: int = 9600, timeout: int = 1):
         """
-        Initialize the fingerprint scanner.
+        Initialize the Arduino fingerprint scanner connection.
         
         Args:
-            port (str): Serial port for the scanner
+            port (str): Serial port for Arduino connection
             baudrate (int): Communication speed
+            timeout (int): Serial timeout in seconds
             
         Raises:
             FingerprintError: If scanner initialization fails
         """
         try:
-            self.scanner = PyFingerprint(
+            self.serial = serial.Serial(
                 port=port,
                 baudrate=baudrate,
-                password=0x00000000,
-                address=0xFFFFFFFF
+                timeout=timeout
             )
+            time.sleep(2)  # Wait for Arduino to reset
             
-            if not self.scanner.verifyPassword():
-                raise FingerprintError("Password verification failed!")
+            # Test connection
+            self.serial.write(b'TEST\n')
+            response = self._read_response()
+            if response != 'OK':
+                raise FingerprintError("Arduino not responding correctly")
             
-            logger.info("Fingerprint scanner initialized successfully")
+            logger.info("Arduino fingerprint scanner initialized successfully")
             
+        except serial.SerialException as e:
+            logger.error(f"Failed to connect to Arduino: {str(e)}")
+            raise FingerprintError(f"Arduino connection failed: {str(e)}")
         except Exception as e:
-            logger.error(f"Failed to initialize fingerprint scanner: {str(e)}")
+            logger.error(f"Failed to initialize scanner: {str(e)}")
             raise FingerprintError(f"Scanner initialization failed: {str(e)}")
+    
+    def _read_response(self, timeout: int = 10) -> str:
+        """
+        Read response from Arduino with timeout.
+        
+        Args:
+            timeout (int): Maximum wait time in seconds
+            
+        Returns:
+            str: Response from Arduino
+            
+        Raises:
+            FingerprintError: If reading times out
+        """
+        start_time = time.time()
+        response = ''
+        
+        while time.time() - start_time < timeout:
+            if self.serial.in_waiting:
+                char = self.serial.read().decode('utf-8')
+                if char == '\n':
+                    return response.strip()
+                response += char
+        
+        raise FingerprintError("Timeout waiting for Arduino response")
     
     def wait_for_finger(self) -> bool:
         """
@@ -62,54 +93,19 @@ class FingerprintScanner:
         """
         try:
             logger.info("Waiting for finger...")
-            while not self.scanner.readImage():
-                pass
-            return True
+            self.serial.write(b'SCAN\n')
             
+            while True:
+                response = self._read_response()
+                if response == 'DETECTED':
+                    return True
+                elif response == 'ERROR':
+                    raise FingerprintError("Error detecting finger")
+                time.sleep(0.1)
+                
         except Exception as e:
             logger.error(f"Error reading fingerprint: {str(e)}")
             raise FingerprintError(f"Failed to read fingerprint: {str(e)}")
-    
-    def convert_and_store(self, buffer: int = 0x01) -> None:
-        """
-        Convert the current fingerprint image and store it in the specified buffer.
-        
-        Args:
-            buffer (int): Buffer location (0x01 or 0x02)
-            
-        Raises:
-            FingerprintError: If conversion fails
-        """
-        try:
-            self.scanner.convertImage(buffer)
-            
-        except Exception as e:
-            logger.error(f"Error converting fingerprint: {str(e)}")
-            raise FingerprintError(f"Failed to convert fingerprint: {str(e)}")
-    
-    def create_template(self) -> bytes:
-        """
-        Create a fingerprint template from the stored characteristics.
-        
-        Returns:
-            bytes: Encoded fingerprint template
-            
-        Raises:
-            FingerprintError: If template creation fails
-        """
-        try:
-            self.scanner.createTemplate()
-            characteristics = self.scanner.downloadCharacteristics()
-            
-            # Convert to bytes and encode
-            template = bytes(characteristics)
-            encoded_template = base64.b64encode(template)
-            
-            return encoded_template
-            
-        except Exception as e:
-            logger.error(f"Error creating template: {str(e)}")
-            raise FingerprintError(f"Failed to create template: {str(e)}")
     
     def enroll_fingerprint(self) -> Tuple[bytes, str]:
         """
@@ -122,31 +118,38 @@ class FingerprintScanner:
             FingerprintError: If enrollment fails
         """
         try:
-            # First reading
-            logger.info("Place finger for first reading...")
-            self.wait_for_finger()
-            self.convert_and_store(0x01)
+            # Start enrollment process
+            logger.info("Starting enrollment...")
+            self.serial.write(b'ENROLL\n')
             
-            # Wait for finger removal
-            logger.info("Remove finger...")
-            while self.scanner.readImage():
+            # Wait for first reading
+            logger.info("Place finger for first reading...")
+            while self._read_response() != 'PLACE_FIRST':
                 pass
             
-            # Second reading
+            # Wait for removal prompt
+            while self._read_response() != 'REMOVE':
+                pass
+                
+            logger.info("Remove finger...")
+            time.sleep(2)
+            
+            # Wait for second reading
             logger.info("Place same finger for second reading...")
-            self.wait_for_finger()
-            self.convert_and_store(0x02)
+            while self._read_response() != 'PLACE_SECOND':
+                pass
             
-            # Check if prints match
-            if self.scanner.compareCharacteristics() == 0:
-                raise FingerprintError("Fingerprints do not match! Please try again.")
-            
-            # Create and store template
-            template = self.create_template()
-            template_hash = hashlib.sha256(template).hexdigest()
-            
-            logger.info("Fingerprint enrolled successfully")
-            return template, template_hash
+            # Get template
+            response = self._read_response()
+            if response.startswith('TEMPLATE:'):
+                template_str = response[9:]  # Remove 'TEMPLATE:' prefix
+                template = base64.b64decode(template_str.encode())
+                template_hash = hashlib.sha256(template).hexdigest()
+                
+                logger.info("Fingerprint enrolled successfully")
+                return template, template_hash
+            else:
+                raise FingerprintError("Failed to get template from Arduino")
             
         except Exception as e:
             logger.error(f"Enrollment failed: {str(e)}")
@@ -166,20 +169,23 @@ class FingerprintScanner:
             FingerprintError: If verification fails
         """
         try:
-            # Read current fingerprint
-            self.wait_for_finger()
-            self.convert_and_store(0x01)
+            # Send stored template to Arduino
+            template_str = base64.b64encode(stored_template).decode()
+            self.serial.write(f'VERIFY:{template_str}\n'.encode())
             
-            # Load stored template
-            decoded_template = base64.b64decode(stored_template)
-            self.scanner.uploadCharacteristics(0x02, list(decoded_template))
+            # Wait for finger placement
+            logger.info("Place finger to verify...")
+            while self._read_response() != 'PLACE_FINGER':
+                pass
             
-            # Compare fingerprints
-            result = self.scanner.compareCharacteristics()
-            
-            # Use a threshold for matching (adjust as needed)
-            threshold = 50
-            return result >= threshold
+            # Get verification result
+            response = self._read_response()
+            if response == 'MATCH':
+                return True
+            elif response == 'NO_MATCH':
+                return False
+            else:
+                raise FingerprintError("Invalid response from Arduino")
             
         except Exception as e:
             logger.error(f"Verification failed: {str(e)}")
@@ -193,12 +199,22 @@ class FingerprintScanner:
             dict: Scanner status information
         """
         try:
-            return {
-                'scanner_connected': True,
-                'template_count': self.scanner.getTemplateCount(),
-                'storage_capacity': self.scanner.getStorageCapacity(),
-                'security_level': self.scanner.getSecurityLevel()
-            }
+            self.serial.write(b'STATUS\n')
+            response = self._read_response()
+            
+            if response.startswith('STATUS:'):
+                status_data = response[7:].split(',')
+                return {
+                    'scanner_connected': True,
+                    'sensor_status': status_data[0],
+                    'image_quality': int(status_data[1]) if len(status_data) > 1 else None
+                }
+            else:
+                return {
+                    'scanner_connected': False,
+                    'error': 'Invalid status response'
+                }
+                
         except Exception as e:
             logger.error(f"Failed to get scanner status: {str(e)}")
             return {
@@ -208,41 +224,16 @@ class FingerprintScanner:
     
     def clean_scanner(self) -> None:
         """
-        Clean up scanner resources and temporary files.
+        Clean up scanner resources and close serial connection.
         """
         try:
-            # Add any cleanup code here if needed
+            if hasattr(self, 'serial') and self.serial.is_open:
+                self.serial.close()
             logger.info("Scanner cleaned up successfully")
         except Exception as e:
             logger.error(f"Cleanup failed: {str(e)}")
 
-# Example usage in views.py
-def enroll_employee_fingerprint(request, employee_id):
-    try:
-        employee = Employee.objects.get(id=employee_id)
-        scanner = FingerprintScanner()
-        
-        template, template_hash = scanner.enroll_fingerprint()
-        
-        # Store template in employee record
-        employee.fingerprint_data = template
-        employee.fingerprint_hash = template_hash
-        employee.save()
-        
-        messages.success(request, "Fingerprint enrolled successfully!")
-        return redirect('employee_detail', pk=employee_id)
-        
-    except FingerprintError as e:
-        messages.error(request, str(e))
-        return redirect('employee_detail', pk=employee_id)
-        
-    except Exception as e:
-        messages.error(request, f"An unexpected error occurred: {str(e)}")
-        return redirect('employee_detail', pk=employee_id)
-    
-    finally:
-        if 'scanner' in locals():
-            scanner.clean_scanner()
+
 
 def record_attendance(employee: Employee) -> Tuple[Attendance, str]:
     """
@@ -328,7 +319,6 @@ def verify_attendance(request):
         if 'scanner' in locals():
             scanner.clean_scanner()
 
-# Add utility methods for attendance reporting
 def get_employee_attendance_summary(employee: Employee, start_date: date, end_date: date) -> dict:
     """
     Get attendance summary for an employee within a date range.

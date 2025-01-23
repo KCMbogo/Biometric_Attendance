@@ -170,7 +170,7 @@ class EmployeeSalary(models.Model):
     late_deductions = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     early_leave_deductions = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     overtime_additions = models.DecimalField(max_digits=8, decimal_places=2, default=0)
-    final_salary = models.DecimalField(max_digits=10, decimal_places=2)
+    final_salary = models.DecimalField(max_digits=10, decimal_places=2, default=100000)
     
     class Meta:
         unique_together = ['employee', 'month']
@@ -186,7 +186,7 @@ class EmployeeSalary(models.Model):
         self.early_leave_deductions = self.total_early_leave_hours * config.early_leave_deduction_rate
         
         # Calculate overtime additions
-        self.overtime_additions = self.total_overtime_hours * config.overtime_rate
+        self.overtime_additions = self.total_overtime_hours * config.overtime_fixed_rate
         
         # Calculate final salary
         self.final_salary = (
